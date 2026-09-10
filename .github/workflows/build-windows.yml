@@ -43,13 +43,11 @@ jobs:
           prefix-key: v1-windows
 
       - name: Install frontend deps
-        run: npm ci
-        if: hashFiles('package-lock.json') != ''
-        continue-on-error: true
-
-      - name: Install frontend deps (fallback)
-        if: hashFiles('package-lock.json') == ''
-        run: npm install
+        shell: pwsh
+        run: |
+          # Prefer npm; bun.lock on runners without bun breaks tauri-action
+          Remove-Item -Force bun.lock -ErrorAction SilentlyContinue
+          if (Test-Path package-lock.json) { npm ci } else { npm install }
 
       - name: Download yt-dlp sidecar
         shell: pwsh
@@ -64,22 +62,15 @@ jobs:
           }
 
       - name: Typecheck frontend
+        shell: pwsh
         run: npx tsc --noEmit
         continue-on-error: true
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: "Pouya Music ${{ github.ref_name }}"
-          releaseBody: "Native Tauri 2 build with Rust core."
-          releaseDraft: true
-          prerelease: false
-          args: ""
+      - name: Build frontend + Tauri (npm)
+        shell: pwsh
+        run: |
+          npm run build:vite
+          npx tauri build
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
