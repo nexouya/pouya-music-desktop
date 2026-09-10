@@ -1,0 +1,24 @@
+node_modules/
+build/
+dist/
+dist-electron/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/binaries/
+uploads/
+
+# Worktrees
+.worktrees/
+
+# Sidecar binaries (downloaded locally)
+bin/yt-dlp.exe
+bin/ffmpeg.exe
+bin/ffprobe.exe
+bin/yt-dlp

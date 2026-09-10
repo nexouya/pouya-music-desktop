@@ -1,0 +1,115 @@
+# Tauri 2 Windows build — produces NSIS installer.
+# Requires: Node 20+, Rust stable MSVC, WebView2 (present on Win10/11).
+# Sidecars (optional): bin/yt-dlp.exe, bin/ffmpeg.exe, bin/ffprobe.exe
+
+name: build-windows
+
+on:
+  push:
+    branches: [main, master, feature/tauri2-rust-core]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: v1-windows
+
+      - name: Install frontend deps
+        run: npm ci
+        if: hashFiles('package-lock.json') != ''
+        continue-on-error: true
+
+      - name: Install frontend deps (fallback)
+        if: hashFiles('package-lock.json') == ''
+        run: npm install
+
+      - name: Download yt-dlp sidecar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force bin | Out-Null
+          $url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+          try {
+            Invoke-WebRequest -Uri $url -OutFile "bin/yt-dlp.exe" -UseBasicParsing
+            Write-Host "yt-dlp.exe downloaded"
+          } catch {
+            Write-Warning "yt-dlp download failed: $_"
+          }
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: "Pouya Music ${{ github.ref_name }}"
+          releaseBody: "Native Tauri 2 build with Rust core."
+          releaseDraft: true
+          prerelease: false
+          args: ""
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pouya-music-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: warn
+          retention-days: 14
+
+  rust-tests:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: v1-tests
+
+      - name: Cargo test (core unit tests)
+        run: cargo test --lib -- --nocapture
+        continue-on-error: false

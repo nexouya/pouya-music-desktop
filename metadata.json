@@ -1,0 +1,6 @@
+{
+  "name": "Pouya Music",
+  "description": "A high-fidelity spatial music streaming platform featuring liquid glass ergonomics, dynamic ambient visualizers, and lossless playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
