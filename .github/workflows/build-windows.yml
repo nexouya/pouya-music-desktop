@@ -45,9 +45,8 @@ jobs:
       - name: Install frontend deps
         shell: pwsh
         run: |
-          # Prefer npm; bun.lock on runners without bun breaks tauri-action
           Remove-Item -Force bun.lock -ErrorAction SilentlyContinue
-          if (Test-Path package-lock.json) { npm ci } else { npm install }
+          npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Download yt-dlp sidecar
         shell: pwsh
